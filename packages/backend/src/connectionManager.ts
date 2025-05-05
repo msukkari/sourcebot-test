@@ -281,7 +281,7 @@ export class ConnectionManager implements IConnectionManager {
                     notFound.users.length > 0 ||
                         notFound.orgs.length > 0 ||
                         notFound.repos.length > 0 ? ConnectionSyncStatus.SYNCED_WITH_WARNINGS : ConnectionSyncStatus.SYNCED,
-                syncedAt: new Date()
+                syncedAt: new Date(Date.now() - 24 * 60 * 60 * 1000)
             }
         })
 
