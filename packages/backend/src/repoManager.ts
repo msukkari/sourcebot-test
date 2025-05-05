@@ -42,25 +42,42 @@ export class RepoManager implements IRepoManager {
         private promClient: PromClient,
         private ctx: AppContext,
     ) {
-        // Repo indexing
-        this.indexQueue = new Queue<RepoIndexingPayload>(REPO_INDEXING_QUEUE, {
-            connection: redis,
-        });
-        this.indexWorker = new Worker(REPO_INDEXING_QUEUE, this.runIndexJob.bind(this), {
-            connection: redis,
-            concurrency: this.settings.maxRepoIndexingJobConcurrency,
-        });
+        this.initializeIndexQueue(redis);
+        this.initializeGarbageCollectionQueue(redis);
+    }
+
+    private initializeIndexQueue(redis: Redis) {
+        this.indexQueue = new Queue<RepoIndexingPayload>(REPO_INDEXING_QUEUE, { connection: redis });
+        this.indexWorker = new Worker(
+            REPO_INDEXING_QUEUE,
+            this.runIndexJob.bind(this),
+            {
+                connection: redis,
+                concurrency: this.settings.maxRepoIndexingJobConcurrency,
+            }
+        );
+        this.setupIndexWorkerListeners();
+    }
+
+    private setupIndexWorkerListeners() {
         this.indexWorker.on('completed', this.onIndexJobCompleted.bind(this));
         this.indexWorker.on('failed', this.onIndexJobFailed.bind(this));
+    }
 
-        // Garbage collection
-        this.gcQueue = new Queue<RepoGarbageCollectionPayload>(REPO_GC_QUEUE, {
-            connection: redis,
-        });
-        this.gcWorker = new Worker(REPO_GC_QUEUE, this.runGarbageCollectionJob.bind(this), {
-            connection: redis,
-            concurrency: this.settings.maxRepoGarbageCollectionJobConcurrency,
-        });
+    private initializeGarbageCollectionQueue(redis: Redis) {
+        this.gcQueue = new Queue<RepoGarbageCollectionPayload>(REPO_GC_QUEUE, { connection: redis });
+        this.gcWorker = new Worker(
+            REPO_GC_QUEUE,
+            this.runGarbageCollectionJob.bind(this),
+            {
+                connection: redis,
+                concurrency: this.settings.maxRepoGarbageCollectionJobConcurrency,
+            }
+        );
+        this.setupGCWorkerListeners();
+    }
+
+    private setupGCWorkerListeners() {
         this.gcWorker.on('completed', this.onGarbageCollectionJobCompleted.bind(this));
         this.gcWorker.on('failed', this.onGarbageCollectionJobFailed.bind(this));
     }
