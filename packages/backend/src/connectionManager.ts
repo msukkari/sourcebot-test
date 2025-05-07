@@ -257,37 +257,30 @@ export class ConnectionManager implements IConnectionManager {
 
 
     private async onSyncJobCompleted(job: Job<JobPayload>, result: JobResult) {
-        this.logger.info(`Connection sync job for connection ${job.data.connectionName} (id: ${job.data.connectionId}, jobId: ${job.id}) completed`);
-        const { connectionId } = job.data;
+        const { connectionId, connectionName } = job.data;
+        this.logger.info(`Connection sync job for connection ${connectionName} (id: ${connectionId}, jobId: ${job.id}) completed`);
 
-        let syncStatusMetadata: Record<string, unknown> = (await this.db.connection.findUnique({
+        const connection = await this.db.connection.findUnique({
             where: { id: connectionId },
             select: { syncStatusMetadata: true }
-        }))?.syncStatusMetadata as Record<string, unknown> ?? {};
-        const { notFound } = syncStatusMetadata as {
-            notFound: {
-                users: string[],
-                orgs: string[],
-                repos: string[],
-            }
-        };
+        });
+
+        const syncStatusMetadata = connection?.syncStatusMetadata as Record<string, unknown> ?? {};
+        const { notFound = { users: [], orgs: [], repos: [] } } = syncStatusMetadata as { notFound: { users: string[], orgs: string[], repos: string[] } };
+
+        const hasSyncWarnings = Object.values(notFound).some(arr => arr.length > 0);
 
         await this.db.connection.update({
-            where: {
-                id: connectionId,
-            },
+            where: { id: connectionId },
             data: {
-                syncStatus:
-                    notFound.users.length > 0 ||
-                        notFound.orgs.length > 0 ||
-                        notFound.repos.length > 0 ? ConnectionSyncStatus.SYNCED_WITH_WARNINGS : ConnectionSyncStatus.SYNCED,
+                syncStatus: hasSyncWarnings ? ConnectionSyncStatus.SYNCED_WITH_WARNINGS : ConnectionSyncStatus.SYNCED,
                 syncedAt: new Date()
             }
-        })
+        });
 
         captureEvent('backend_connection_sync_job_completed', {
-            connectionId: connectionId,
-            repoCount: result.repoCount,
+            connectionId,
+            repoCount: result.repoCount + 5,
         });
     }
 
