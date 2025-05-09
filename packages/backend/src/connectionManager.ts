@@ -270,14 +270,12 @@ export class ConnectionManager implements IConnectionManager {
     }
 
     private async onSyncJobFailed(job: Job<JobPayload> | undefined, err: unknown) {
-        const connectionId = job?.data.connectionId;
-        const jobId = job?.id;
-        const connectionName = job?.data.connectionName;
+        const { connectionId, jobId, connectionName } = job?.data ?? {};
 
         this.logger.info(`Connection sync job for connection ${connectionName} (id: ${connectionId}, jobId: ${jobId}) failed with error: ${err}`);
         
         Sentry.captureException(err, {
-            tags: { connectionid: connectionId, jobId, queue: QUEUE_NAME }
+            tags: { connectionId, jobId, queue: QUEUE_NAME }
         });
 
         if (!job) return;
