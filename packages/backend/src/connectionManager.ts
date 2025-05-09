@@ -109,44 +109,29 @@ export class ConnectionManager implements IConnectionManager {
     }
 
     private async runSyncJob(job: Job<JobPayload>): Promise<JobResult> {
-        const { config, orgId, connectionName } = job.data;
-        // @note: We aren't actually doing anything with this atm.
-        const abortController = new AbortController();
+        const { config, orgId, connectionId } = job.data;
 
         const connection = await this.db.connection.findUnique({
-            where: {
-                id: job.data.connectionId,
-            },
+            where: { id: connectionId },
         });
 
         if (!connection) {
-            const e = new BackendException(BackendError.CONNECTION_SYNC_CONNECTION_NOT_FOUND, {
-                message: `Connection ${job.data.connectionId} not found`,
+            const error = new BackendException(BackendError.CONNECTION_SYNC_CONNECTION_NOT_FOUND, {
+                message: `Connection ${connectionId} not found`,
             });
-            Sentry.captureException(e);
-            throw e;
+            Sentry.captureException(error);
+            throw error;
         }
 
-        // Reset the syncStatusMetadata to an empty object at the start of the sync job
         await this.db.connection.update({
-            where: {
-                id: job.data.connectionId,
-            },
+            where: { id: connectionId },
             data: {
                 syncStatus: ConnectionSyncStatus.SYNCING,
                 syncStatusMetadata: {}
             }
-        })
+        });
 
-
-        let result: {
-            repoData: RepoData[],
-            notFound: {
-                users: string[],
-                orgs: string[],
-                repos: string[],
-            }
-        } = {
+        const result: SyncJobResult = {
             repoData: [],
             notFound: {
                 users: [],
