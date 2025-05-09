@@ -285,53 +285,48 @@ export class ConnectionManager implements IConnectionManager {
     }
 
     private async onSyncJobFailed(job: Job<JobPayload> | undefined, err: unknown) {
-        this.logger.info(`Connection sync job for connection ${job?.data.connectionName} (id: ${job?.data.connectionId}, jobId: ${job?.id}) failed with error: ${err}`);
+        const connectionId = job?.data.connectionId;
+        const jobId = job?.id;
+        const connectionName = job?.data.connectionName;
+
+        this.logger.info(`Connection sync job for connection ${connectionName} (id: ${connectionId}, jobId: ${jobId}) failed with error: ${err}`);
+        
         Sentry.captureException(err, {
-            tags: {
-                connectionid: job?.data.connectionId,
-                jobId: job?.id,
-                queue: QUEUE_NAME,
-            }
+            tags: { connectionid: connectionId, jobId, queue: QUEUE_NAME }
         });
 
-        if (job) {
-            const { connectionId } = job.data;
+        if (!job) return;
 
-            captureEvent('backend_connection_sync_job_failed', {
-                connectionId: connectionId,
-                error: err instanceof BackendException ? err.code : 'UNKNOWN',
-            });
+        captureEvent('backend_connection_sync_job_failed', {
+            connectionId,
+            error: err instanceof BackendException ? err.code : 'UNKNOWN',
+        });
 
-            // We may have pushed some metadata during the execution of the job, so we make sure to not overwrite the metadata here
-            let syncStatusMetadata: Record<string, unknown> = (await this.db.connection.findUnique({
-                where: { id: connectionId },
-                select: { syncStatusMetadata: true }
-            }))?.syncStatusMetadata as Record<string, unknown> ?? {};
+        const connection = await this.db.connection.findUnique({
+            where: { id: connectionId },
+            select: { syncStatusMetadata: true }
+        });
 
-            if (err instanceof BackendException) {
-                syncStatusMetadata = {
-                    ...syncStatusMetadata,
-                    error: err.code,
-                    ...err.metadata,
-                }
-            } else {
-                syncStatusMetadata = {
-                    ...syncStatusMetadata,
-                    error: 'UNKNOWN',
-                }
-            }
+        let syncStatusMetadata: Record<string, unknown> = connection?.syncStatusMetadata as Record<string, unknown> ?? {};
 
-            await this.db.connection.update({
-                where: {
-                    id: connectionId,
-                },
-                data: {
-                    syncStatus: ConnectionSyncStatus.FAILED,
-                    syncedAt: new Date(),
-                    syncStatusMetadata: syncStatusMetadata as Prisma.InputJsonValue,
-                }
-            });
+        if (err instanceof BackendException) {
+            syncStatusMetadata = {
+                ...syncStatusMetadata,
+                error: err.code,
+                ...err.metadata,
+            };
+        } else {
+            syncStatusMetadata.error = 'UNKNOWN';
         }
+
+        await this.db.connection.update({
+            where: { id: connectionId },
+            data: {
+                syncStatus: ConnectionSyncStatus.FAILED,
+                syncedAt: new Date(),
+                syncStatusMetadata: syncStatusMetadata as Prisma.InputJsonValue,
+            }
+        });
     }
 
     public dispose() {
