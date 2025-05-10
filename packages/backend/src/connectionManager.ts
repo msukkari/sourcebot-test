@@ -272,6 +272,8 @@ export class ConnectionManager implements IConnectionManager {
     private async onSyncJobFailed(job: Job<JobPayload> | undefined, err: unknown) {
         const { connectionId, jobId, connectionName } = job?.data ?? {};
 
+        this.logger.info("TEST LOG");
+
         this.logger.info(`Connection sync job for connection ${connectionName} (id: ${connectionId}, jobId: ${jobId}) failed with error: ${err}`);
         
         Sentry.captureException(err, {
