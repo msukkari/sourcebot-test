@@ -176,6 +176,17 @@ export class ConnectionManager implements IConnectionManager {
                     case 'git': {
                         return await compileGenericGitHostConfig(config, job.data.connectionId, orgId);
                     }
+                    default: {
+                        this.logger.error(`Unsupported connection type: ${config.type}`);
+                        return {
+                            repoData: [],
+                            notFound: {
+                                users: [],
+                                orgs: [],
+                                repos: [],
+                            }
+                        };
+                    }
                 }
             })();
         } catch (err) {
